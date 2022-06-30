@@ -134,3 +134,28 @@ def histogram_feature(gray_image, bins=10, range=[0, 256]):
 def LBP_features(gray_image):
     out_scikit = local_binary_pattern(image=gray_image, P=8, R=1, method='default')
     return out_scikit
+
+# feature-descriptor-1: Hu Moments
+def fd_hu_moments(image):
+    gray = np.copy(image)
+    if len(image.shape) == 3: 
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    feature = cv2.HuMoments(cv2.moments(gray)).flatten()
+    return feature
+
+# feature-descriptor-2: Haralick Texture
+def fd_haralick(image):
+    gray = np.copy(image)
+    
+    if len(image.shape) == 3: 
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    haralick = mahotas.features.haralick(gray).mean(axis=0)
+    return haralick
+
+# feature-descriptor-3: Color Histogram
+def fd_histogram(image, mask=None):
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    hist  = cv2.calcHist([image], [0, 1, 2], None, [BINS, BINS, BINS], [0, 256, 0, 256, 0, 256])
+    cv2.normalize(hist, hist)
+    return hist.flatten() 

@@ -25,8 +25,6 @@ with initialize(config_path="../config/"):
     data_cfg = compose(config_name="data_path")
 data_cfg = OmegaConf.create(data_cfg)
 
-FCM_CLUSTER = data_cfg.final_variable.fcm_cluster
-
 datagen = ImageDataGenerator(
     fill_mode='constant',    # Tự động thêm các giá trị 0
     rotation_range=90, 
@@ -52,7 +50,6 @@ def generator_image(image, method_transform):
     # save new generator image
     return new_image
 
-
 # anh truyen vao la anh mau
 def remove_background(image):
     image = np.copy(image)
@@ -70,6 +67,23 @@ def remove_background(image):
     bg_remove_img = cv2.bitwise_and(image, image,mask=mask)
 
     return bg_remove_img
+
+def img_segmentation(rgb_img, hsv_img):
+    lower_green = np.array([25,0,20])
+    upper_green = np.array([100,255,255])
+    
+
+    healthy_mask = cv2.inRange(hsv_img, lower_green, upper_green)
+    result = cv2.bitwise_and(rgb_img,rgb_img, mask=healthy_mask)
+
+    lower_brown = np.array([10,0,10])
+    upper_brown = np.array([30,255,255])
+    disease_mask = cv2.inRange(hsv_img, lower_brown, upper_brown)
+    disease_result = cv2.bitwise_and(rgb_img, rgb_img, mask=disease_mask)
+
+    final_mask = healthy_mask + disease_mask
+    final_result = cv2.bitwise_and(rgb_img, rgb_img, mask=final_mask)
+    
 
 # anh dau vao la anh xam
 def sobel_edge_detection(image, blur_ksize=5, sobel_ksize=1, skipping_threshold=10):
@@ -93,6 +107,7 @@ def sobel_edge_detection(image, blur_ksize=5, sobel_ksize=1, skipping_threshold=
                 img_sobel[i][j] = 255
     return img_sobel
 
+
 def sobel_edge_detection_2(image, blur_ksize=5, sobel_ksize=3):
     gray = np.copy(image)
     img_gaussian = cv2.GaussianBlur(gray, (blur_ksize, blur_ksize), 0)
@@ -109,6 +124,7 @@ def sobel_edge_detection_2(image, blur_ksize=5, sobel_ksize=3):
     img_sobel = (img_sobelx + img_sobely)
     
     return img_sobel
+
 
 # anh truyen vao la anh xam
 def prewitt_edge_detection(image, blur_ksize = 5, skipping_threshold=30):
@@ -137,6 +153,7 @@ def prewitt_edge_detection(image, blur_ksize = 5, skipping_threshold=30):
                 img_prewitt[i][j] = 255
     return img_prewitt
 
+
 # anh truyen vao la anh xam
 def canny_edge_detection(img, blur_ksize=5, threshold1=100, threshold2=200, skipping_threshold=30):
     gray = np.copy(img)
@@ -147,6 +164,7 @@ def canny_edge_detection(img, blur_ksize=5, threshold1=100, threshold2=200, skip
 #             if img_canny[i][j] < skipping_threshold:
 #                 img_canny[i][j] = 0
     return img_canny
+
 
 # anh truyen vao la anh xam
 def lapacian_detection(image):
@@ -164,25 +182,25 @@ def lapacian_detection_2(image):
     result = np.uint8(abs_img)
     return result
 
-# anh truen vao la anh xam
-def fcm_image(image, n_cluster): 
-    original_shape = image.shape
-    data = image.reshape(-1, 1)
+# segment image -> tach nen cho anh
+def img_segmentation(rgb_img, hsv_img):
+    lower_green = np.array([25,0,20])
+    upper_green = np.array([100,255,255])
     
-    fcm = FCM(n_clusters=n_cluster)
-    fcm.fit(data)
-    label = fcm.predict(data)
-    label = label.reshape(original_shape).astype(np.int16)
 
-    # convert to range(0, 255)
-    x = label.flatten().reshape(-1, 1)
-    mm = MinMaxScaler(feature_range=(0, 255))
-    mm.fit(x)
-    x = mm.transform(x)
-    x = x.astype(np.int16)
-    fcm_result = x.reshape(original_shape)
+    healthy_mask = cv2.inRange(hsv_img, lower_green, upper_green)
+    result = cv2.bitwise_and(rgb_img,rgb_img, mask=healthy_mask)
 
-    return fcm_result
+    lower_brown = np.array([10,0,10])
+    upper_brown = np.array([30,255,255])
+    disease_mask = cv2.inRange(hsv_img, lower_brown, upper_brown)
+    disease_result = cv2.bitwise_and(rgb_img, rgb_img, mask=disease_mask)
+
+    final_mask = healthy_mask + disease_mask
+    final_result = cv2.bitwise_and(rgb_img, rgb_img, mask=final_mask)
+    
+    return final_result
+
 
 # step xu ly du lieu
 # don gian chi co remove bg -> convert to gray -> remove noise by gau
@@ -282,8 +300,13 @@ def train_single_model(model, X_train, y_train, X_test, y_test):
     return predicts, accuracy,precision, recall, f1
 
 # Train nhieu model va chon ra model co do chinh xac cao nhat
-def train_test_model(models, X_train, y_train, X_test, y_test):
+
+def train_test_model_classification(models, X_train, y_train, X_test, y_test):
     print("TRAINING PROCESSING")
+
+    log_cols=["Classifier", "Accuracy"]
+    log = pd.DataFrame(columns=log_cols)
+
     best_accuracy = 0
     best_model = None
     best_predict = None
@@ -295,10 +318,13 @@ def train_test_model(models, X_train, y_train, X_test, y_test):
         print("******  Results  *******")
         print(f"Accuracy: {acc:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f} | F1 Score: {f1:.4f}\n")
 
+        log_entry = pd.DataFrame([[name, acc*100]], columns=log_cols)
+        log = log.append(log_entry)
+
         if acc > best_accuracy: 
             best_accuracy = acc 
             best_predict = preds
             best_model = deepcopy(model)
     
     print("="*30)
-    return best_accuracy, best_predict, best_model
+    return log, best_accuracy, best_predict, best_model
