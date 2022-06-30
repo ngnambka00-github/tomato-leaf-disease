@@ -1,0 +1,9 @@
+data: 
+  leaf_tomato_disease_path: data/plantvillage/
+  glmc_feature_extraction_path: data/preprocess/glmc_feature_extraction.csv
+  hu_moment_feature_extraction_path: data/preprocess/hu_moment_feature_extraction.csv
+  h5_train_features: data/preprocess/features_data.h5
+  h5_train_labels: data/preprocess/labels_data.h5
+final_variable:
+  fcm_cluster: 5
+  hog_bins_feature: 10
