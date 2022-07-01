@@ -35,4 +35,3 @@ model_classifiers = [
     ("GradientBoosting",                GradientBoostingClassifier(n_estimators=NUM_TREES, learning_rate=1.0, max_depth=MAX_DEPTH)),
     ("XGBoost",                         XGBClassifier(n_estimators=NUM_TREES, random_state=RANDOM_SEED)),
 ]
-print(model_classifiers)
