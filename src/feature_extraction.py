@@ -3,11 +3,20 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 from numpy import linalg as LA
+import mahotas
 
 from skimage.feature import hog
 from skimage.feature import graycomatrix, graycoprops
 from sklearn.metrics.cluster import entropy as compute_entropy
 from skimage.feature import local_binary_pattern
+from hydra import initialize, compose
+from omegaconf import OmegaConf
+
+with initialize(config_path="../config/"):
+    data_cfg = compose(config_name="hyper_parameter")
+parameter_cfg = OmegaConf.create(data_cfg)
+
+BINS = parameter_cfg.final_variable.hog_bins_feature
 
 # anh truyen vao la anh mau
 def hog_extraction(image):

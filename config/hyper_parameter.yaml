@@ -1,0 +1,8 @@
+final_variable:
+  hog_bins_feature: 8
+  seed: 10
+  n_classes: 10
+  num_trees: 100
+  max_deep: 5
+
+  test_size_split: 0.2

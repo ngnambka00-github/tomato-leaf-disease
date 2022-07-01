@@ -1,325 +1,176 @@
-from cProfile import label
-from operator import mod
+import os
+import glob
+import h5py
+import cv2
+import time
+import joblib
+from copy import deepcopy
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from copy import deepcopy
+from sklearn.preprocessing import MinMaxScaler, StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler, StandardScaler
-from imblearn.over_sampling import SMOTE
-from fcmeans import FCM
 from sklearn.metrics import accuracy_score, f1_score, recall_score, precision_score
 
 from hydra import initialize, compose
 from omegaconf import OmegaConf
+from imblearn.over_sampling import SMOTE
 
-import cv2
-import os
-import os
-import glob
-import gc
+from image_processing import img_segmentation, sobel_edge_detection_2
+from feature_extraction import fd_haralick, fd_hu_moments, fd_histogram
 
-from keras.preprocessing.image import ImageDataGenerator
-
+# Global data config
 with initialize(config_path="../config/"):
-    data_cfg = compose(config_name="data_path")
-data_cfg = OmegaConf.create(data_cfg)
+    data_cfg = compose(config_name="hyper_parameter")
+parameter_cfg = OmegaConf.create(data_cfg)
 
-datagen = ImageDataGenerator(
-    fill_mode='constant',    # Tự động thêm các giá trị 0
-    rotation_range=90, 
-    zoom_range=[0.7, 1.0], 
-    horizontal_flip=True, 
-    vertical_flip=True, 
-    brightness_range=[0.7,1.3], 
-    width_shift_range=0.2, height_shift_range=0.2)
-
-def generator_image(image, method_transform):
-    data = np.copy(image)
-
-    # expand dimension to one sample
-    samples = np.expand_dims(data, 0)
-
-    # create image data augmentation generator
-    datagen = method_transform
-
-    # prepare iterator
-    it = datagen.flow(samples, batch_size=1)
-    new_image = it.next()[0].astype('uint8')
-
-    # save new generator image
-    return new_image
-
-# anh truyen vao la anh mau
-def remove_background(image):
-    image = np.copy(image)
-
-    # create hsv
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    # set lower and upper color limits
-    low_val = (0,60,0)
-    high_val = (179,255,255)
-    # Threshold the HSV image 
-    mask = cv2.inRange(hsv, low_val,high_val)
-    # remove noise
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel=np.ones((8,8),dtype=np.uint8))
-    # apply mask to original image
-    bg_remove_img = cv2.bitwise_and(image, image,mask=mask)
-
-    return bg_remove_img
-
-def img_segmentation(rgb_img, hsv_img):
-    lower_green = np.array([25,0,20])
-    upper_green = np.array([100,255,255])
-    
-
-    healthy_mask = cv2.inRange(hsv_img, lower_green, upper_green)
-    result = cv2.bitwise_and(rgb_img,rgb_img, mask=healthy_mask)
-
-    lower_brown = np.array([10,0,10])
-    upper_brown = np.array([30,255,255])
-    disease_mask = cv2.inRange(hsv_img, lower_brown, upper_brown)
-    disease_result = cv2.bitwise_and(rgb_img, rgb_img, mask=disease_mask)
-
-    final_mask = healthy_mask + disease_mask
-    final_result = cv2.bitwise_and(rgb_img, rgb_img, mask=final_mask)
-    
-
-# anh dau vao la anh xam
-def sobel_edge_detection(image, blur_ksize=5, sobel_ksize=1, skipping_threshold=10):
-    gray = np.copy(image)
-    img_gaussian = cv2.GaussianBlur(gray,(blur_ksize,blur_ksize),0)
-
-    sobelx64f = cv2.Sobel(img_gaussian,cv2.CV_64F,1,0,ksize=sobel_ksize)
-    abs_sobel64f = np.absolute(sobelx64f)
-    img_sobelx = np.uint8(abs_sobel64f)
-
-    sobely64f = cv2.Sobel(img_gaussian,cv2.CV_64F,1,0,ksize=sobel_ksize)
-    abs_sobel64f = np.absolute(sobely64f)
-    img_sobely = np.uint8(abs_sobel64f)
-
-    img_sobel = (img_sobelx + img_sobely)/2
-    for i in range(img_sobel.shape[0]):
-        for j in range(img_sobel.shape[1]):
-            if img_sobel[i][j] < skipping_threshold:
-                img_sobel[i][j] = 0
-            else:
-                img_sobel[i][j] = 255
-    return img_sobel
-
-
-def sobel_edge_detection_2(image, blur_ksize=5, sobel_ksize=3):
-    gray = np.copy(image)
-    img_gaussian = cv2.GaussianBlur(gray, (blur_ksize, blur_ksize), 0)
-    
-    # sobel algorthm use cv2.CV_64F
-    sobelx64f = cv2.Sobel(img_gaussian, cv2.CV_64F, 1, 0, ksize=sobel_ksize)
-    abs_sobel64f = np.absolute(sobelx64f)
-    img_sobelx = np.uint8(abs_sobel64f)
-
-    sobely64f = cv2.Sobel(img_gaussian, cv2.CV_64F, 1, 0, ksize=sobel_ksize)
-    abs_sobel64f = np.absolute(sobely64f)
-    img_sobely = np.uint8(abs_sobel64f)
-    
-    img_sobel = (img_sobelx + img_sobely)
-    
-    return img_sobel
-
-
-# anh truyen vao la anh xam
-def prewitt_edge_detection(image, blur_ksize = 5, skipping_threshold=30):
-    gray = np.copy(image)
-    img_gaussian = cv2.GaussianBlur(gray,(blur_ksize,blur_ksize),0)
-
-    #prewitt
-    kernelx = np.array([[1,1,1],[0,0,0],[-1,-1,-1]])
-    kernely = np.array([[-1,0,1],[-1,0,1],[-1,0,1]])
-    img_prewittx = cv2.filter2D(img_gaussian, -1, kernelx)
-    img_prewitty = cv2.filter2D(img_gaussian, -1, kernely)
-    img_prewitt1 = (img_prewittx + img_prewitty)/2
-    
-    kernelx2 = np.array([[-1,-1,-1],[0,0,0],[1,1,1]])
-    kernely2 = np.array([[1,0,-1],[1,0,-1],[1,0,-1]])
-    img_prewittx2 = cv2.filter2D(img_gaussian, -1, kernelx2)
-    img_prewitty2 = cv2.filter2D(img_gaussian, -1, kernely2)
-    img_prewitt2 = (img_prewittx2 + img_prewitty2)/2
-    
-    img_prewitt = (img_prewitt1 + img_prewitt2)/2
-    for i in range(img_prewitt.shape[0]):
-        for j in range(img_prewitt.shape[1]):
-            if img_prewitt[i][j] < skipping_threshold:
-                img_prewitt[i][j] = 0
-            else:
-                img_prewitt[i][j] = 255
-    return img_prewitt
-
-
-# anh truyen vao la anh xam
-def canny_edge_detection(img, blur_ksize=5, threshold1=100, threshold2=200, skipping_threshold=30):
-    gray = np.copy(img)
-    img_gaussian = cv2.GaussianBlur(gray,(blur_ksize,blur_ksize),0)
-    img_canny = cv2.Canny(img_gaussian,threshold1,threshold2)
-#     for i in range(img_canny.shape[0]):
-#         for j in range(img_canny.shape[1]):
-#             if img_canny[i][j] < skipping_threshold:
-#                 img_canny[i][j] = 0
-    return img_canny
-
-
-# anh truyen vao la anh xam
-def lapacian_detection(image):
-    img = np.copy(image)
-    lap_img = cv2.Laplacian(img, cv2.CV_64F, ksize=3)
-    abs_img = np.absolute(lap_img)
-    result = np.uint8(abs_img)
-    return result
-
-def lapacian_detection_2(image):
-    img = np.copy(image)
-    g_blur = cv2.GaussianBlur(img, (5, 5), 0)
-    lap_img = cv2.Laplacian(g_blur, cv2.CV_64F, ksize=3)
-    abs_img = np.absolute(lap_img)
-    result = np.uint8(abs_img)
-    return result
-
-# segment image -> tach nen cho anh
-def img_segmentation(rgb_img, hsv_img):
-    lower_green = np.array([25,0,20])
-    upper_green = np.array([100,255,255])
-    
-
-    healthy_mask = cv2.inRange(hsv_img, lower_green, upper_green)
-    result = cv2.bitwise_and(rgb_img,rgb_img, mask=healthy_mask)
-
-    lower_brown = np.array([10,0,10])
-    upper_brown = np.array([30,255,255])
-    disease_mask = cv2.inRange(hsv_img, lower_brown, upper_brown)
-    disease_result = cv2.bitwise_and(rgb_img, rgb_img, mask=disease_mask)
-
-    final_mask = healthy_mask + disease_mask
-    final_result = cv2.bitwise_and(rgb_img, rgb_img, mask=final_mask)
-    
-    return final_result
-
-
-# step xu ly du lieu
-# don gian chi co remove bg -> convert to gray -> remove noise by gau
-# Nen remove noise -> roi moi sharpen 
-def step_preprocessing(img):
-    # remove background
-    rm_bg_img = remove_background(img)
-
-    # convert to gray image
-    gray_img = cv2.cvtColor(rm_bg_img, cv2.COLOR_BGR2GRAY)
-
-    # sharpen image
-    sharpen_img = lapacian_detection(gray_img)
-
-    # remove noise
-    remove_noise_img = cv2.GaussianBlur(sharpen_img, (5, 5), 0)
-    
-    # fuzzy mean image
-    # fcm_img = fcm_image(remove_noise_img, n_cluster=FCM_CLUSTER)
-
-    return remove_noise_img
+RANDOM_SEED = parameter_cfg.final_variable.seed
+TEST_SIZE_SPLIT = parameter_cfg.final_variable.test_size_split
 
 # export image to features
-def export_feature_from_folder(data_path, columns_name, feature_extraction_methods, export_data_path=None):
+def extract_feature_to_file(data_path, feature_path, label_path):
+    # get the training labels
+    train_labels = os.listdir(data_path)
 
-    # encoding label to int value 
-    subdirs = os.listdir(data_path)
-    label_encode = {key: index for index, key in enumerate(subdirs)}
+    # sort the training labels
+    train_labels.sort()
 
-    df = pd.DataFrame(columns=columns_name)
+    # empty lists to hold feature vectors and labels
+    features = []
+    labels = []
 
-    for subdir in os.listdir(data_path):
-        
-        file_names = glob.glob(f"{os.path.join(data_path, subdir)}/**")
-        len_file = len(file_names)
-        
-        for i in tqdm(range(len_file), desc=f"{subdir}"):
-            path_image = file_names[i]
+    # loop over the training data sub-folders
+    for training_name in train_labels:
 
-            # đọc ảnh
-            image = cv2.imread(path_image)
+        file_names = glob.glob(f"{os.path.join(data_path, training_name)}/**")
 
-            # step image
-            step_image = step_preprocessing(image)
+        # loop over the images in each sub-folder
+        for i, file in tqdm(enumerate(file_names), desc=f"[STATUS] Folder: {training_name}"):
+            # read the image
+            image = cv2.imread(file)
 
-            # cac buoc trich dac trung
-            total_features = np.array([])
-            for method in feature_extraction_methods:
-                total_features = np.concatenate((total_features, method(step_image)))
-            total_features = np.concatenate((total_features, [label_encode[subdir]]))
+            # Running Function Bit By Bit
+            RGB_BGR = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            BGR_HSV = cv2.cvtColor(RGB_BGR, cv2.COLOR_RGB2HSV)
+            IMG_SEGMENT = img_segmentation(RGB_BGR,BGR_HSV)
+            
+            # convert to gray image
+            IMG_GRAY = cv2.cvtColor(IMG_SEGMENT, cv2.COLOR_RGB2GRAY)
 
-            # Có thể xử lý dữ liệu trích xuất đặc trưng đưa vào file data
-            df = df.append(
-                { key: value for key, value in zip(columns_name, total_features) }, 
-                ignore_index=True
-            )
+            # sharpen image
+            SOBEL_IMG = sobel_edge_detection_2(IMG_GRAY)
 
-            if i % 100 == 0: 
-                gc.collect()
+            # morphology image
+            kernel = np.ones((3,3),np.uint8)
+            MORPHOLOGY_IMG = cv2.morphologyEx(SOBEL_IMG, cv2.MORPH_OPEN, kernel)
+            
+            # Feature extraction
+            fv_hu_moments = fd_hu_moments(MORPHOLOGY_IMG)
+            fv_haralick   = fd_haralick(MORPHOLOGY_IMG)
+            fv_histogram  = fd_histogram(IMG_SEGMENT)
+            
+            # Concatenate 
+            new_feature = np.hstack([fv_histogram, fv_haralick, fv_hu_moments])
+            
+            # update the list of labels and feature vectors
+            labels.append(training_name)
+            features.append(new_feature)
 
-    if export_data_path: 
-        df.to_csv(export_data_path, index=False)
-        
-    return df
+    print("[STATUS] completed Feature Extraction Phase...")
 
-def split_data(data_path): 
-    data = pd.read_csv(data_path)
-    
-    # chon cot features va cot labels
-    features = np.array(data.iloc[:, :-1].values)
-    labels = np.array(data.iloc[:, -1].values)
+    # encode the target labels
+    le = LabelEncoder()
+    target = le.fit_transform(labels)
 
-    # split data train va test
-    X_train, X_test, y_train, y_test = train_test_split(features, labels, test_size=0.2, random_state=42)
+    # save to file
+    h5f_data = h5py.File(feature_path, 'w')
+    h5f_data.create_dataset('dataset_1', data=features)
 
-    # nomalize du lieu
-    normalize = StandardScaler()
-    # normalize = StandardScaler()
-    normalize.fit(X_train)
-    X_train = normalize.transform(X_train)
-    X_test = normalize.transform(X_test)
+    h5f_label = h5py.File(label_path, 'w')
+    h5f_label.create_dataset('dataset_1', data=target)
 
-    # Xu ly imbalance data
+    h5f_data.close()
+    h5f_label.close()
+
+    # tra ve feature, label encoded, class name
+    return features, target, le.classes_
+
+# split dataset to X_train, y_train, X_test, y_test
+def split_data(feature_path, label_path): 
+    # read from file
+    h5f_data  = h5py.File(feature_path, 'r')
+    h5f_label = h5py.File(label_path, 'r')
+
+    global_features_string = h5f_data['dataset_1']
+    global_labels_string   = h5f_label['dataset_1']
+
+    global_features = np.array(global_features_string)
+    global_labels = np.array(global_labels_string)
+
+    # normailize
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    rescaled_features = scaler.fit_transform(global_features)
+
+    # split data
+    (X_train, X_test, y_train, y_test) = train_test_split(rescaled_features, global_labels, test_size=TEST_SIZE_SPLIT, random_state=RANDOM_SEED)
+
+    # Oversampling -> Process Imbalance Data
     sm = SMOTE()
-    X_train, y_train = sm.fit_resample(X_train, y_train)
+    X_train_os, y_train_os = sm.fit_resample(X_train, y_train)
 
-    return (X_train, y_train), (X_test, y_test)
+    h5f_data.close()
+    h5f_label.close()
+
+    return (X_train_os, y_train_os), (X_test, y_test)
+
 
 # Train single model
 def train_single_model(model, X_train, y_train, X_test, y_test):
     model.fit(X_train, y_train)
     predicts = model.predict(X_test)
+
+    # compute accuracy
     accuracy = accuracy_score(y_test, predicts)
+
+    # compute precision
     precision = precision_score(y_test, predicts, average='macro')
+
+    # compute recall
     recall = recall_score(y_test, predicts, average='macro')
+
+    # compute f1_score
     f1 = f1_score(y_test, predicts, average='macro')
-    return predicts, accuracy,precision, recall, f1
+
+    return predicts, accuracy, precision, recall, f1
+
 
 # Train nhieu model va chon ra model co do chinh xac cao nhat
-
-def train_test_model_classification(models, X_train, y_train, X_test, y_test):
+def train_test_model_classification(models, X_train, y_train, X_test, y_test, log_path=None, best_model_path=None):
     print("TRAINING PROCESSING")
 
-    log_cols=["Classifier", "Accuracy"]
+    log_cols=["Classifier", "Accuracy", "Precision", "Recall", "F1_Score", "Trainning_Time"]
     log = pd.DataFrame(columns=log_cols)
 
     best_accuracy = 0
     best_model = None
     best_predict = None
-    for model in models: 
-        preds, acc, precision, recall, f1 = train_single_model(model, X_train, y_train, X_test, y_test)
-        name = model.__class__.__name__
-        print("="*30)
-        print(name)
-        print("******  Results  *******")
-        print(f"Accuracy: {acc:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f} | F1 Score: {f1:.4f}\n")
+    for model_name, model in models: 
 
-        log_entry = pd.DataFrame([[name, acc*100]], columns=log_cols)
-        log = log.append(log_entry)
+        time_start = time.time()
+        preds, acc, precision, recall, f1 = train_single_model(model, X_train, y_train, X_test, y_test)
+        time_end = time.time()
+        time_execute = time_end - time_start
+
+        name_from_class = model.__class__.__name__
+
+        print("="*30)
+        print(model_name)
+        print("*******  Results  ********")
+        print(f"Acc: {acc:.4f} | P: {precision:.4f} | R: {recall:.4f} | F1: {f1:.4f}")
+        print(f"Training time: {time_execute:.4f}\n")
+
+        log_entry = pd.DataFrame([[model_name, acc*100, precision*100, recall*100, f1*100, time_execute]], columns=log_cols)
+        log = log.append(log_entry, ignore_index=True)
 
         if acc > best_accuracy: 
             best_accuracy = acc 
@@ -327,4 +178,18 @@ def train_test_model_classification(models, X_train, y_train, X_test, y_test):
             best_model = deepcopy(model)
     
     print("="*30)
+
+    # save log
+    if log_path is not None: 
+        log.to_csv(log_path, index=False)
+    
+    # save best model with highest accuracy
+    if best_model_path is not None: 
+        joblib.dump(best_model, best_model_path)
+
+        # load the model from disk
+        # loaded_model = joblib.load(filename)
+        # result = loaded_model.score(X_test, Y_test)
+        # print(result)
+
     return log, best_accuracy, best_predict, best_model

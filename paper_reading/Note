@@ -1,0 +1,17 @@
+- Các phương pháp trích chọn đặc trưng: 
+	1. Histogram
+	2. HOG
+	https://minhng.info/tutorials/histograms-of-oriented-gradients.html
+	
+	3. Moment Hu
+	https://123docz.net//document/7686514-nhan-dang-mau-hinh-anh-su-dung-mo-men-hu.htm
+	- Python code
+	https://learnopencv.com/shape-matching-using-hu-moments-c-python/
+	
+	4. LBP
+	https://minhng.info/tutorials/local-binary-patterns-lbp-opencv.html
+	
+	5. Haralick Features (GLCM)
+	
+	- Python code: 
+	https://www.youtube.com/watch?v=5x-CIHRmMNY
