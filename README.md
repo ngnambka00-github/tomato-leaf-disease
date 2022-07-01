@@ -1,4 +1,4 @@
-# Tomato leaf Disease Detection
+# Tomato Leaf Disease Detection
 
 ## 1. Prepare data
 * You must download dataset from url: https://www.kaggle.com/datasets/charuchaudhry/plantvillage-tomato-leaf-dataset
