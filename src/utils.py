@@ -69,6 +69,10 @@ def extract_feature_to_file(data_path, feature_path, label_path):
             fv_haralick   = fd_haralick(MORPHOLOGY_IMG)
             fv_histogram  = fd_histogram(IMG_SEGMENT)
             
+            # Hoang: Hu moment 
+            # Khanh: Haralick
+            # Trinh: Histogram Feature Extraction
+
             # Concatenate 
             new_feature = np.hstack([fv_histogram, fv_haralick, fv_hu_moments])
             
@@ -95,6 +99,7 @@ def extract_feature_to_file(data_path, feature_path, label_path):
     # tra ve feature, label encoded, class name
     return features, target, le.classes_
 
+# EDA (Exploration data analysiz)
 # split dataset to X_train, y_train, X_test, y_test
 def split_data(feature_path, label_path): 
     # read from file

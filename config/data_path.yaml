@@ -2,5 +2,6 @@ data:
   leaf_tomato_disease_path: data/plantvillage/
   h5_train_features: data/preprocess/features_data.h5
   h5_train_labels: data/preprocess/labels_data.h5
+  h5_label_names: data/preprocess/label_names.npz
   best_model_path: data/report/best_model.sav
   report_training_accuracy: data/report/report_training.csv
