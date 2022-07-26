@@ -65,17 +65,17 @@ def extract_feature_to_file(data_path, feature_path, label_path):
             MORPHOLOGY_IMG = cv2.morphologyEx(SOBEL_IMG, cv2.MORPH_OPEN, kernel)
             
             # Feature extraction
-            # fv_hu_moments = fd_hu_moments(MORPHOLOGY_IMG)
-            # fv_haralick   = fd_haralick(MORPHOLOGY_IMG)
+            fv_hu_moments = fd_hu_moments(MORPHOLOGY_IMG)
+            fv_haralick   = fd_haralick(MORPHOLOGY_IMG)
             fv_histogram  = fd_histogram(IMG_SEGMENT)
 
             # Concatenate 
-            # new_feature = np.hstack([fv_histogram, fv_haralick, fv_hu_moments])
+            new_feature = np.hstack([fv_histogram, fv_haralick, fv_hu_moments])
             # new_feature = np.hstack([fv_hu_moments])
             
             # update the list of labels and feature vectors
             labels.append(training_name)
-            features.append(fv_histogram)
+            features.append(new_feature)
 
     print("[STATUS] completed Feature Extraction Phase...")
 
