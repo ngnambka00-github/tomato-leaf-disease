@@ -1,7 +1,43 @@
 data: 
   leaf_tomato_disease_path: data/plantvillage/
-  h5_train_features: data/preprocess/features_data.h5
-  h5_train_labels: data/preprocess/labels_data.h5
   h5_label_names: data/preprocess/label_names.npz
-  best_model_path: data/report/best_model.sav
-  report_training_accuracy: data/report/report_training.csv
+
+  concat_humm_haralick_colorhistogram: 
+    features: data/preprocess/concat_humm_haralick_ch/features_data.h5
+    labels: data/preprocess/concat_humm_haralick_ch/labels_data.h5
+    best_model_smote: data/report/concat/best_model_smote.sav
+    best_model_not_smote: data/report/concat/best_model_not_smote.sav
+    report_training_acc_smote: data/report/concat/report_training_smote.csv
+    report_training_acc_not_smote: data/report/concat/report_training_not_smote.csv
+    compare_method_smote: data/report/concat/compare_all_methods_smote.xlsx
+    compare_method_not_smote: data/report/concat/compare_all_methods_not_smote.xlsx
+
+  humm:
+    features: data/preprocess/hu_mm/features_data.h5
+    labels: data/preprocess/hu_mm/labels_data.h5
+    best_model_smote: data/report/hu_mm/best_model_smote.sav
+    best_model_not_smote: data/report/hu_mm/best_model_not_smote.sav
+    report_training_acc_smote: data/report/hu_mm/report_training_smote.csv
+    report_training_acc_not_smote: data/report/hu_mm/report_training_not_smote.csv
+    compare_method_smote: data/report/hu_mm/compare_all_methods_smote.xlsx
+    compare_method_not_smote: data/report/hu_mm/compare_all_methods_not_smote.xlsx
+
+  haralick:
+    features: data/preprocess/haralick/features_data.h5
+    labels: data/preprocess/haralick/labels_data.h5
+    best_model_smote: data/report/haralick/best_model_smote.sav
+    best_model_not_smote: data/report/haralick/best_model_not_smote.sav
+    report_training_acc_smote: data/report/haralick/report_training_smote.csv
+    report_training_acc_not_smote: data/report/haralick/report_training_not_smote.csv
+    compare_method_smote: data/report/haralick/compare_all_methods_smote.xlsx
+    compare_method_not_smote: data/report/haralick/compare_all_methods_not_smote.xlsx
+
+  color_histogram:
+    features: data/preprocess/color_histogram/features_data.h5
+    labels: data/preprocess/color_histogram/labels_data.h5
+    best_model_smote: data/report/color_histogram/best_model_smote.sav
+    best_model_not_smote: data/report/color_histogram/best_model_not_smote.sav
+    report_training_acc_smote: data/report/color_histogram/report_training_smote.csv
+    report_training_acc_not_smote: data/report/color_histogram/report_training_not_smote.csv
+    compare_method_smote: data/report/color_histogram/compare_all_methods_smote.xlsx
+    compare_method_not_smote: data/report/color_histogram/compare_all_methods_not_smote.xlsx

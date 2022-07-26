@@ -65,20 +65,17 @@ def extract_feature_to_file(data_path, feature_path, label_path):
             MORPHOLOGY_IMG = cv2.morphologyEx(SOBEL_IMG, cv2.MORPH_OPEN, kernel)
             
             # Feature extraction
-            fv_hu_moments = fd_hu_moments(MORPHOLOGY_IMG)
-            fv_haralick   = fd_haralick(MORPHOLOGY_IMG)
+            # fv_hu_moments = fd_hu_moments(MORPHOLOGY_IMG)
+            # fv_haralick   = fd_haralick(MORPHOLOGY_IMG)
             fv_histogram  = fd_histogram(IMG_SEGMENT)
-            
-            # Hoang: Hu moment 
-            # Khanh: Haralick
-            # Trinh: Histogram Feature Extraction
 
             # Concatenate 
-            new_feature = np.hstack([fv_histogram, fv_haralick, fv_hu_moments])
+            # new_feature = np.hstack([fv_histogram, fv_haralick, fv_hu_moments])
+            # new_feature = np.hstack([fv_hu_moments])
             
             # update the list of labels and feature vectors
             labels.append(training_name)
-            features.append(new_feature)
+            features.append(fv_histogram)
 
     print("[STATUS] completed Feature Extraction Phase...")
 
@@ -97,11 +94,11 @@ def extract_feature_to_file(data_path, feature_path, label_path):
     h5f_label.close()
 
     # tra ve feature, label encoded, class name
-    return features, target, le.classes_
+    return np.array(features), np.array(target), le.classes_
 
 # EDA (Exploration data analysiz)
 # split dataset to X_train, y_train, X_test, y_test
-def split_data(feature_path, label_path): 
+def split_data(feature_path, label_path, is_sampling=True): 
     # read from file
     h5f_data  = h5py.File(feature_path, 'r')
     h5f_label = h5py.File(label_path, 'r')
@@ -112,12 +109,13 @@ def split_data(feature_path, label_path):
     global_features = np.array(global_features_string)
     global_labels = np.array(global_labels_string)
 
+    # split data
+    (X_train, X_test, y_train, y_test) = train_test_split(global_features, global_labels, test_size=TEST_SIZE_SPLIT, random_state=RANDOM_SEED)
+
     # normailize
     scaler = MinMaxScaler(feature_range=(0, 1))
-    rescaled_features = scaler.fit_transform(global_features)
-
-    # split data
-    (X_train, X_test, y_train, y_test) = train_test_split(rescaled_features, global_labels, test_size=TEST_SIZE_SPLIT, random_state=RANDOM_SEED)
+    X_train = scaler.fit_transform(X_train)
+    X_test = scaler.transform(X_test)
 
     # Oversampling -> Process Imbalance Data
     sm = SMOTE()
@@ -126,7 +124,11 @@ def split_data(feature_path, label_path):
     h5f_data.close()
     h5f_label.close()
 
-    return (X_train_os, y_train_os), (X_test, y_test)
+    if not is_sampling: 
+        return (X_train, y_train), (X_test, y_test), scaler
+    
+    # tra ve gia tri scaler
+    return (X_train_os, y_train_os), (X_test, y_test), scaler
 
 
 # Train single model
@@ -198,3 +200,30 @@ def train_test_model_classification(models, X_train, y_train, X_test, y_test, lo
         # print(result)
 
     return log, best_accuracy, best_predict, best_model
+
+
+def prepare_feature_to_predict(image): 
+    # Running Function Bit By Bit
+    RGB_BGR = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    BGR_HSV = cv2.cvtColor(RGB_BGR, cv2.COLOR_RGB2HSV)
+    IMG_SEGMENT = img_segmentation(RGB_BGR,BGR_HSV)
+    
+    # convert to gray image
+    IMG_GRAY = cv2.cvtColor(IMG_SEGMENT, cv2.COLOR_RGB2GRAY)
+
+    # sharpen image
+    SOBEL_IMG = sobel_edge_detection_2(IMG_GRAY)
+
+    # morphology image
+    kernel = np.ones((3,3),np.uint8)
+    MORPHOLOGY_IMG = cv2.morphologyEx(SOBEL_IMG, cv2.MORPH_OPEN, kernel)
+    
+    # Feature extraction
+    fv_hu_moments = fd_hu_moments(MORPHOLOGY_IMG)
+    fv_haralick   = fd_haralick(MORPHOLOGY_IMG)
+    fv_histogram  = fd_histogram(IMG_SEGMENT)
+
+    # Concatenate 
+    new_feature = np.hstack([fv_histogram, fv_haralick, fv_hu_moments])
+
+    return new_feature

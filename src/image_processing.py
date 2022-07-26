@@ -1,6 +1,5 @@
 import numpy as np
 import cv2
-from keras.preprocessing.image import ImageDataGenerator
 
 from hydra import initialize, compose
 from omegaconf import OmegaConf
@@ -8,33 +7,6 @@ from omegaconf import OmegaConf
 with initialize(config_path="../config/"):
     data_cfg = compose(config_name="data_path")
 data_cfg = OmegaConf.create(data_cfg)
-
-# Phuong phap lam giau them anh
-method_transform = ImageDataGenerator(
-    fill_mode='constant',    # Tự động thêm các giá trị 0
-    rotation_range=90, 
-    zoom_range=[0.7, 1.0], 
-    horizontal_flip=True, 
-    vertical_flip=True, 
-    brightness_range=[0.7,1.3], 
-    width_shift_range=0.2, height_shift_range=0.2)
-
-# lam giau them anh
-def generator_image(image, method_transform):
-    data = np.copy(image)
-
-    # expand dimension to one sample
-    samples = np.expand_dims(data, 0)
-
-    # create image data augmentation generator
-    datagen = method_transform
-
-    # prepare iterator
-    it = datagen.flow(samples, batch_size=1)
-    new_image = it.next()[0].astype('uint8')
-
-    # save new generator image
-    return new_image
 
 # anh truyen vao la anh mau -> tach nen cach so 1
 def remove_background(image):
@@ -59,7 +31,6 @@ def img_segmentation(rgb_img, hsv_img):
     lower_green = np.array([25,0,20])
     upper_green = np.array([100,255,255])
     
-
     healthy_mask = cv2.inRange(hsv_img, lower_green, upper_green)
     result = cv2.bitwise_and(rgb_img,rgb_img, mask=healthy_mask)
 
@@ -70,6 +41,8 @@ def img_segmentation(rgb_img, hsv_img):
 
     final_mask = healthy_mask + disease_mask
     final_result = cv2.bitwise_and(rgb_img, rgb_img, mask=final_mask)
+
+    return final_result
     
 # anh dau vao la anh xam
 # bo loc sobel -> cat nguong de lay anh black-white
